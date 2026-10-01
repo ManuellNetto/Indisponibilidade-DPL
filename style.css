@@ -14,7 +14,7 @@
     --texto-secundario: #b1b4b8;
     --cor-destaque: #fdfdfd;
     --cor-total: #fdfdfd;
-    --cor-parcial: #fdfdfd;
+    --cor-parcial: #fbbf24;
     --borda-sutil: #334155;
 }
 
@@ -236,4 +236,50 @@ body {
 
 .card-grafico-full .grafico-wrapper {
     height: 420px;   /* Um pouco mais alto, pois tem mais itens */
+}
+
+/* ===== Grupos de filtro (label + campo juntos) ===== */
+.filtro-grupo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* ===== Selects dos novos filtros ===== */
+.filtro-select {
+    background-color: transparent;
+    color: var(--texto-principal);
+    border: 1px solid var(--borda-sutil);
+    padding: 8px 32px 8px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    /* Setinha customizada à direita */
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b1b4b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 14px;
+}
+
+.filtro-select:hover {
+    color: var(--texto-principal);
+    border-color: var(--cor-destaque);
+}
+
+.filtro-select:focus {
+    outline: none;
+    border-color: var(--cor-destaque);
+    box-shadow: 0 0 0 2px rgba(253, 253, 253, 0.15);
+}
+
+/* ===== Corrige a cor das opções (dropdown nativo) ===== */
+.filtro-select option {
+    background-color: var(--fundo-card);
+    color: var(--texto-principal);
 }
