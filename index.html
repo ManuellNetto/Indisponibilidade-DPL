@@ -23,15 +23,40 @@
     <main class="conteudo">
 
         <!-- Barra de filtros -->
-        <section class="filtros">
-            <span class="filtros-label">Gerência:</span>
-            <div class="filtros-botoes">
-                <button class="filtro-btn ativo" data-filtro="GSTC">GSTC</button>
-                <button class="filtro-btn" data-filtro="GEOM">GEOM</button>
-                <button class="filtro-btn" data-filtro="TODAS">Todas</button>
-            </div>
-            <span class="filtros-info" id="infoFiltro">Exibindo: GSTC</span>
-        </section>
+<!-- Barra de filtros -->
+<section class="filtros">
+    <div class="filtro-grupo">
+        <span class="filtros-label">Gerência:</span>
+        <div class="filtros-botoes">
+            <button class="filtro-btn ativo" data-filtro="GSTC">GSTC</button>
+            <button class="filtro-btn" data-filtro="GEOM">GEOM</button>
+            <button class="filtro-btn" data-filtro="TODAS">Todas</button>
+        </div>
+    </div>
+
+    <div class="filtro-grupo">
+        <span class="filtros-label">Mês:</span>
+        <select id="filtroMes" class="filtro-select">
+            <option value="TODOS">Todos</option>
+        </select>
+    </div>
+
+    <div class="filtro-grupo">
+        <span class="filtros-label">Seccional:</span>
+        <select id="filtroSeccional" class="filtro-select">
+            <option value="TODAS">Todas</option>
+        </select>
+    </div>
+
+    <div class="filtro-grupo">
+        <span class="filtros-label">Segmento:</span>
+        <select id="filtroSegmento" class="filtro-select">
+            <option value="TODOS">Todos</option>
+        </select>
+    </div>
+
+    <span class="filtros-info" id="infoFiltro">Exibindo: GSTC</span>
+</section>
 
         <!-- Cards de totais -->
         <section class="cards">
