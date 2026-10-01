@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rastreio de Indisponibilidade</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+    <header class="topbar">
+        <div class="topbar-titulo">
+            <h1>Rastreio de Indisponibilidade</h1>
+            <p>Painel de análise operacional</p>
+        </div>
+        <div class="topbar-logo">
+            <img src="Logo_Branco.png" alt="Logo da Empresa">
+        </div>
+    </header>
+
+    <main class="conteudo">
+
+        <!-- Barra de filtros -->
+        <section class="filtros">
+            <span class="filtros-label">Gerência:</span>
+            <div class="filtros-botoes">
+                <button class="filtro-btn ativo" data-filtro="GSTC">GSTC</button>
+                <button class="filtro-btn" data-filtro="GEOM">GEOM</button>
+                <button class="filtro-btn" data-filtro="TODAS">Todas</button>
+            </div>
+            <span class="filtros-info" id="infoFiltro">Exibindo: GSTC</span>
+        </section>
+
+        <!-- Cards de totais -->
+        <section class="cards">
+            <div class="card card-total">
+                <span class="card-titulo">Total de Ocorrências</span>
+                <span class="card-valor" id="totalGeral">--</span>
+                <span class="card-subtitulo">registros no período</span>
+            </div>
+            <div class="card card-total-dia">
+                <span class="card-titulo">Ocorrências TOTAL</span>
+                <span class="card-valor" id="totalTotal">--</span>
+                <span class="card-subtitulo">dia inteiro indisponível</span>
+            </div>
+            <div class="card card-parcial-dia">
+                <span class="card-titulo">Ocorrências PARCIAL</span>
+                <span class="card-valor" id="totalParcial">--</span>
+                <span class="card-subtitulo">parte do dia indisponível</span>
+            </div>
+        </section>
+
+        <!-- Área de gráficos (próximas etapas) -->
+        <!-- Área de gráficos -->
+        <!-- Área de gráficos -->
+        <section class="graficos" id="areaGraficos">
+
+    <!-- Gráfico 1: Volume por Base -->
+            <div class="card-grafico">
+                <h2 class="grafico-titulo">Volume por Base</h2>
+            <div class="grafico-wrapper">
+                <canvas id="graficoBase"></canvas>
+            </div>
+            </div>
+
+    <!-- Gráfico 2: Quantidade por Faixa de Indisponibilidade -->
+            <div class="card-grafico">
+                <h2 class="grafico-titulo">Quantidade por Faixa de Indisponibilidade</h2>
+            <div class="grafico-wrapper">
+                <canvas id="graficoFaixa"></canvas>
+            </div>
+            </div>
+
+    <!-- Gráfico 3: Tipos de Indisponibilidades (largura total) -->
+            <div class="card-grafico card-grafico-full">
+                <h2 class="grafico-titulo">Top 10 Tipos de Indisponibilidade</h2>
+            <div class="grafico-wrapper">
+                <canvas id="graficoTipos"></canvas>
+            </div>
+            </div>
+    <!-- Gráfico 4: Equipes com mais indisponibilidade -->
+            <div class="card-grafico card-grafico-full">
+                <h2 class="grafico-titulo">Top 15 Equipes com Mais Indisponibilidades</h2>
+            <div class="grafico-wrapper">
+                <canvas id="graficoEquipes"></canvas>
+            </div>
+            </div>
+
+    <!-- Gráfico 5: Dias da semana com mais volume -->
+            <div class="card-grafico">
+                <h2 class="grafico-titulo">Volume por Dia da Semana</h2>
+            <div class="grafico-wrapper">
+                <canvas id="graficoDias"></canvas>
+            </div>
+            </div>
+
+    <!-- Gráfico 6: Volume por Período do Dia -->
+            <div class="card-grafico">
+                <h2 class="grafico-titulo">Volume por Período do Dia</h2>
+            <div class="grafico-wrapper">
+                <canvas id="graficoPeriodos"></canvas>
+            </div>
+            </div>
+
+        </section>
+
+    
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
