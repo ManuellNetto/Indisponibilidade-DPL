@@ -1,12 +1,15 @@
 // ===== Configurações =====
 const ARQUIVO_CSV = "dados.csv";
-const FILTRO_PADRAO = "GSTC";   // Filtro inicial
+const FILTRO_PADRAO = "GSTC";
 
 // ===== Estado global =====
-let dadosCompletos = [];        // Todos os dados do CSV
-let filtroAtual = FILTRO_PADRAO;
+let dadosCompletos = [];
+let filtroGerencia = FILTRO_PADRAO;
+let filtroMes = "TODOS";
+let filtroSeccional = "TODAS";
+let filtroSegmento = "TODOS";
 
-// Variáveis globais dos gráficos (para poder destruí-los antes de recriar)
+// Gráficos
 let graficoBase = null;
 let graficoFaixa = null;
 let graficoTipos = null;
@@ -14,6 +17,10 @@ let graficoEquipes = null;
 let graficoPeriodos = null;
 let graficoDias = null;
 
+const MESES_NOMES = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+];
 
 // ===== Função principal =====
 function iniciarDashboard() {
@@ -22,7 +29,7 @@ function iniciarDashboard() {
         header: true,
         dynamicTyping: false,
         skipEmptyLines: true,
-        complete: function(resultado) {
+        complete: function (resultado) {
             if (resultado.errors.length > 0) {
                 console.error("Erros ao ler o CSV:", resultado.errors);
             }
@@ -30,13 +37,11 @@ function iniciarDashboard() {
             dadosCompletos = resultado.data;
             console.log("Total de linhas lidas do CSV:", dadosCompletos.length);
 
-            // Configura os botões de filtro
-            configurarFiltros();
-
-            // Renderiza o dashboard com o filtro padrão
-            aplicarFiltro(FILTRO_PADRAO);
+            configurarFiltrosGerencia();
+            atualizarOpcoesFiltros();   // popula selects com base no filtro inicial
+            aplicarFiltros();
         },
-        error: function(erro) {
+        error: function (erro) {
             console.error("Erro ao carregar o CSV:", erro);
             document.getElementById("totalGeral").textContent = "Erro";
             document.getElementById("totalTotal").textContent = "Erro";
@@ -45,54 +50,222 @@ function iniciarDashboard() {
     });
 }
 
-// ===== Configura os botões de filtro =====
-function configurarFiltros() {
+// ===== Extrai o mês (ex: "03/2026") da coluna DATA =====
+function extrairMes(linha) {
+    const dataStr = (linha.DATA || "").trim();
+    if (!dataStr) return null;
+
+    const partes = dataStr.split("/");
+    if (partes.length !== 3) return null;
+
+    const mes = parseInt(partes[1], 10);
+    const ano = partes[2];
+    if (isNaN(mes) || mes < 1 || mes > 12) return null;
+
+    // Retorna algo como "2026-03" para ordenar corretamente
+    return `${ano}-${String(mes).padStart(2, "0")}`;
+}
+
+// ===== Converte "2026-03" em "Março/2026" =====
+function formatarMes(mesChave) {
+    if (!mesChave || mesChave === "TODOS") return "Todos";
+    const [ano, mes] = mesChave.split("-");
+    return `${MESES_NOMES[parseInt(mes, 10) - 1]}/${ano}`;
+}
+
+// ===== Botões de gerência =====
+function configurarFiltrosGerencia() {
     const botoes = document.querySelectorAll(".filtro-btn");
 
     botoes.forEach(botao => {
-        botao.addEventListener("click", function() {
-            const valorFiltro = this.getAttribute("data-filtro");
-
-            // Atualiza a classe "ativo" visualmente
+        botao.addEventListener("click", function () {
             botoes.forEach(b => b.classList.remove("ativo"));
             this.classList.add("ativo");
 
-            // Aplica o filtro
-            aplicarFiltro(valorFiltro);
+            filtroGerencia = this.getAttribute("data-filtro");
+
+            // Reset dos filtros dependentes ao trocar gerência
+            filtroMes = "TODOS";
+            filtroSeccional = "TODAS";
+            filtroSegmento = "TODOS";
+
+            atualizarOpcoesFiltros();
+            aplicarFiltros();
         });
+    });
+
+    // Listeners dos selects
+    document.getElementById("filtroMes").addEventListener("change", function () {
+        filtroMes = this.value;
+        filtroSeccional = "TODAS";
+        filtroSegmento = "TODOS";
+        atualizarOpcoesFiltros();
+        aplicarFiltros();
+    });
+
+    document.getElementById("filtroSeccional").addEventListener("change", function () {
+        filtroSeccional = this.value;
+        filtroSegmento = "TODOS";
+        atualizarOpcoesFiltros();
+        aplicarFiltros();
+    });
+
+    document.getElementById("filtroSegmento").addEventListener("change", function () {
+        filtroSegmento = this.value;
+        aplicarFiltros();
     });
 }
 
-// ===== Aplica o filtro e renderiza o dashboard =====
-function aplicarFiltro(valorFiltro) {
-    filtroAtual = valorFiltro;
+// ===== Retorna os dados já filtrados por gerência + mês (base para popular selects) =====
+function dadosParaPopularSelects() {
+    let dados = dadosCompletos;
 
-    // Filtra os dados
-    let dadosFiltrados;
-    if (valorFiltro === "TODAS") {
-        dadosFiltrados = dadosCompletos;
-        document.getElementById("infoFiltro").textContent = "Exibindo: Todas as gerências";
-    } else {
-        dadosFiltrados = dadosCompletos.filter(linha => {
-            const gerencia = (linha.GERENCIA || "").trim().toUpperCase();
-            return gerencia === valorFiltro.toUpperCase();
-        });
-        document.getElementById("infoFiltro").textContent = "Exibindo: " + valorFiltro;
+    if (filtroGerencia !== "TODAS") {
+        dados = dados.filter(linha =>
+            (linha.GERENCIA || "").trim().toUpperCase() === filtroGerencia.toUpperCase()
+        );
     }
 
-    console.log(`Filtro aplicado: ${valorFiltro} | Registros: ${dadosFiltrados.length}`);
+    if (filtroMes !== "TODOS") {
+        dados = dados.filter(linha => extrairMes(linha) === filtroMes);
+    }
 
-    // Renderiza os cards com os dados filtrados
+    return dados;
+}
+
+// ===== Popula os selects em cascata =====
+function atualizarOpcoesFiltros() {
+    const baseParaSelects = dadosParaPopularSelects();
+
+    // --- MÊS ---
+    const mesesUnicos = [...new Set(
+        baseParaSelects.map(extrairMes).filter(Boolean)
+    )].sort();
+
+    const selectMes = document.getElementById("filtroMes");
+    const valorMesAnterior = filtroMes;
+    selectMes.innerHTML = '<option value="TODOS">Todos</option>';
+    mesesUnicos.forEach(m => {
+        const opt = document.createElement("option");
+        opt.value = m;
+        opt.textContent = formatarMes(m);
+        selectMes.appendChild(opt);
+    });
+    selectMes.value = mesesUnicos.includes(valorMesAnterior) ? valorMesAnterior : "TODOS";
+    filtroMes = selectMes.value;
+
+    // --- SECCIONAL (base) ---
+    // Aplicamos também o filtro de mês para refinar as seccionais disponíveis
+    let baseParaSeccional = baseParaSelects;
+    if (filtroMes !== "TODOS") {
+        baseParaSeccional = baseParaSeccional.filter(linha => extrairMes(linha) === filtroMes);
+    }
+
+    const seccionaisUnicas = [...new Set(
+        baseParaSeccional.map(linha => (linha.base || "").trim()).filter(Boolean)
+    )].sort();
+
+    const selectSeccional = document.getElementById("filtroSeccional");
+    const valorSeccionalAnterior = filtroSeccional;
+    selectSeccional.innerHTML = '<option value="TODAS">Todas</option>';
+    seccionaisUnicas.forEach(s => {
+        const opt = document.createElement("option");
+        opt.value = s;
+        opt.textContent = s;
+        selectSeccional.appendChild(opt);
+    });
+    selectSeccional.value = seccionaisUnicas.includes(valorSeccionalAnterior)
+        ? valorSeccionalAnterior
+        : "TODAS";
+    filtroSeccional = selectSeccional.value;
+
+    // --- SEGMENTO ---
+    let baseParaSegmento = baseParaSeccional;
+    if (filtroSeccional !== "TODAS") {
+        baseParaSegmento = baseParaSegmento.filter(linha =>
+            (linha.base || "").trim() === filtroSeccional
+        );
+    }
+
+    const segmentosUnicos = [...new Set(
+        baseParaSegmento.map(linha => (linha.SEGMENTO || "").trim()).filter(Boolean)
+    )].sort();
+
+    const selectSegmento = document.getElementById("filtroSegmento");
+    const valorSegmentoAnterior = filtroSegmento;
+    selectSegmento.innerHTML = '<option value="TODOS">Todos</option>';
+    segmentosUnicos.forEach(s => {
+        const opt = document.createElement("option");
+        opt.value = s;
+        opt.textContent = s;
+        selectSegmento.appendChild(opt);
+    });
+    selectSegmento.value = segmentosUnicos.includes(valorSegmentoAnterior)
+        ? valorSegmentoAnterior
+        : "TODOS";
+    filtroSegmento = selectSegmento.value;
+}
+
+// ===== Aplica TODOS os filtros e renderiza =====
+function aplicarFiltros() {
+    let dadosFiltrados = dadosCompletos;
+
+    // 1. Gerência
+    if (filtroGerencia !== "TODAS") {
+        dadosFiltrados = dadosFiltrados.filter(linha =>
+            (linha.GERENCIA || "").trim().toUpperCase() === filtroGerencia.toUpperCase()
+        );
+    }
+
+    // 2. Mês
+    if (filtroMes !== "TODOS") {
+        dadosFiltrados = dadosFiltrados.filter(linha => extrairMes(linha) === filtroMes);
+    }
+
+    // 3. Seccional (base)
+    if (filtroSeccional !== "TODAS") {
+        dadosFiltrados = dadosFiltrados.filter(linha =>
+            (linha.base || "").trim() === filtroSeccional
+        );
+    }
+
+    // 4. Segmento
+    if (filtroSegmento !== "TODOS") {
+        dadosFiltrados = dadosFiltrados.filter(linha =>
+            (linha.SEGMENTO || "").trim() === filtroSegmento
+        );
+    }
+
+    // Texto informativo
+    atualizarInfoFiltro(dadosFiltrados.length);
+
+    console.log(`Filtros → Gerência: ${filtroGerencia} | Mês: ${filtroMes} | Seccional: ${filtroSeccional} | Segmento: ${filtroSegmento} | Registros: ${dadosFiltrados.length}`);
+
     renderizarCards(dadosFiltrados);
-
-    // Renderiza os gráficos com os dados filtrados
     renderizarGraficoBase(dadosFiltrados);
     renderizarGraficoFaixa(dadosFiltrados);
     renderizarGraficoTipos(dadosFiltrados);
     renderizarGraficoEquipes(dadosFiltrados);
     renderizarGraficoPeriodos(dadosFiltrados);
     renderizarGraficoDias(dadosFiltrados);
-    
+}
+
+// ===== Monta o texto "Exibindo: ..." =====
+function atualizarInfoFiltro(qtd) {
+    const partes = [];
+
+    if (filtroGerencia === "TODAS") {
+        partes.push("Todas as gerências");
+    } else {
+        partes.push(filtroGerencia);
+    }
+
+    if (filtroMes !== "TODOS") partes.push(formatarMes(filtroMes));
+    if (filtroSeccional !== "TODAS") partes.push("Secc: " + filtroSeccional);
+    if (filtroSegmento !== "TODOS") partes.push("Seg: " + filtroSegmento);
+
+    document.getElementById("infoFiltro").textContent =
+        `Exibindo: ${partes.join(" • ")} (${qtd.toLocaleString("pt-BR")} registros)`;
 }
 
 // ===== Renderiza os 3 cards =====
@@ -103,35 +276,30 @@ function renderizarCards(dados) {
 
     dados.forEach(linha => {
         const tipo = (linha.TIPO_INDISPONIBILIDADE_DIA || "").trim().toUpperCase();
-        if (tipo === "TOTAL") {
-            totalTotal++;
-        } else if (tipo === "PARCIAL") {
-            totalParcial++;
-        }
+        if (tipo === "TOTAL") totalTotal++;
+        else if (tipo === "PARCIAL") totalParcial++;
     });
 
-    document.getElementById("totalGeral").textContent = totalGeral.toLocaleString('pt-BR');
-    document.getElementById("totalTotal").textContent = totalTotal.toLocaleString('pt-BR');
-    document.getElementById("totalParcial").textContent = totalParcial.toLocaleString('pt-BR');
+    document.getElementById("totalGeral").textContent = totalGeral.toLocaleString("pt-BR");
+    document.getElementById("totalTotal").textContent = totalTotal.toLocaleString("pt-BR");
+    document.getElementById("totalParcial").textContent = totalParcial.toLocaleString("pt-BR");
 }
 
-// ===== Gráfico 1: Volume por Base (Barras horizontais) =====
+/* =========================================================
+   GRÁFICOS — o código abaixo é o mesmo que você já tinha
+   ========================================================= */
+
 function renderizarGraficoBase(dados) {
-    // 1. Contagem por base
     const contagem = {};
     dados.forEach(linha => {
         const base = (linha.base || "Sem base").trim();
         contagem[base] = (contagem[base] || 0) + 1;
     });
 
-    // 2. Ordena do maior para o menor
     const basesOrdenadas = Object.keys(contagem).sort((a, b) => contagem[b] - contagem[a]);
     const valoresOrdenados = basesOrdenadas.map(base => contagem[base]);
 
-    // 3. Destrói o gráfico antigo (se existir)
     if (graficoBase) graficoBase.destroy();
-
-    // 4. Cria o novo gráfico
     const ctx = document.getElementById("graficoBase").getContext("2d");
 
     graficoBase = new Chart(ctx, {
@@ -155,50 +323,31 @@ function renderizarGraficoBase(dados) {
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        label: function(context) {
-                            return context.parsed.x.toLocaleString("pt-BR") + " ocorrências";
-                        }
+                        label: ctx => ctx.parsed.x.toLocaleString("pt-BR") + " ocorrências"
                     }
                 }
             },
             scales: {
-                x: {
-                    beginAtZero: true,
-                    ticks: { color: "#94a3b8" },
-                    grid: { color: "rgba(51, 65, 85, 0.5)" }
-                },
-                y: {
-                    ticks: { color: "#f1f5f9", font: { size: 13 } },
-                    grid: { display: false }
-                }
+                x: { beginAtZero: true, ticks: { color: "#94a3b8" }, grid: { color: "rgba(51, 65, 85, 0.5)" } },
+                y: { ticks: { color: "#f1f5f9", font: { size: 13 } }, grid: { display: false } }
             }
         }
     });
 }
 
-// ===== Gráfico 2: Quantidade por Faixa de Indisponibilidade (Linhas) =====
 function renderizarGraficoFaixa(dados) {
-    // 1. Ordem fixa das faixas (do menor tempo para o maior)
     const ordemFaixas = ["< 2h", "2 a 4h", "4 a 6h", "> 6h"];
-
-    // 2. Inicializa contagem com zero em todas as faixas
     const contagem = {};
     ordemFaixas.forEach(f => contagem[f] = 0);
 
-    // 3. Conta as ocorrências por faixa
     dados.forEach(linha => {
         const faixa = (linha.faixa_indisp || "").trim();
-        if (contagem.hasOwnProperty(faixa)) {
-            contagem[faixa]++;
-        }
+        if (contagem.hasOwnProperty(faixa)) contagem[faixa]++;
     });
 
     const valores = ordemFaixas.map(f => contagem[f]);
 
-    // 4. Destrói o gráfico antigo (se existir)
     if (graficoFaixa) graficoFaixa.destroy();
-
-    // 5. Cria o novo gráfico
     const ctx = document.getElementById("graficoFaixa").getContext("2d");
 
     graficoFaixa = new Chart(ctx, {
@@ -226,48 +375,29 @@ function renderizarGraficoFaixa(dados) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.parsed.y.toLocaleString("pt-BR") + " ocorrências";
-                        }
-                    }
+                    callbacks: { label: ctx => ctx.parsed.y.toLocaleString("pt-BR") + " ocorrências" }
                 }
             },
             scales: {
-                x: {
-                    ticks: { color: "#94a3b8", font: { size: 13 } },
-                    grid: { color: "rgba(51, 65, 85, 0.5)" }
-                },
-                y: {
-                    beginAtZero: true,
-                    ticks: { color: "#94a3b8" },
-                    grid: { color: "rgba(51, 65, 85, 0.5)" }
-                }
+                x: { ticks: { color: "#94a3b8", font: { size: 13 } }, grid: { color: "rgba(51, 65, 85, 0.5)" } },
+                y: { beginAtZero: true, ticks: { color: "#94a3b8" }, grid: { color: "rgba(51, 65, 85, 0.5)" } }
             }
         }
     });
 }
 
-// ===== Gráfico 3: Top 10 Tipos de Indisponibilidade (Barras horizontais) =====
 function renderizarGraficoTipos(dados) {
-    // 1. Contagem por tipo
     const contagem = {};
     dados.forEach(linha => {
         const tipo = (linha.TIPO_DE_INDISPONIBILIDADE || "Não informado").trim() || "Não informado";
         contagem[tipo] = (contagem[tipo] || 0) + 1;
     });
 
-    // 2. Ordena do maior para o menor
     const tiposOrdenados = Object.keys(contagem).sort((a, b) => contagem[b] - contagem[a]);
-
-    // 3. Pega apenas os Top 10
     const top10 = tiposOrdenados.slice(0, 10);
     const valoresTop10 = top10.map(tipo => contagem[tipo]);
 
-    // 4. Destrói o gráfico antigo (se existir)
     if (graficoTipos) graficoTipos.destroy();
-
-    // 5. Cria o novo gráfico
     const ctx = document.getElementById("graficoTipos").getContext("2d");
 
     graficoTipos = new Chart(ctx, {
@@ -277,7 +407,7 @@ function renderizarGraficoTipos(dados) {
             datasets: [{
                 label: "Ocorrências",
                 data: valoresTop10,
-                backgroundColor: "rgba(255, 52, 1, 0.66)",   // verde-água
+                backgroundColor: "rgba(255, 52, 1, 0.66)",
                 borderColor: "rgba(184, 48, 6, 0.97)",
                 borderWidth: 1,
                 borderRadius: 6
@@ -290,52 +420,29 @@ function renderizarGraficoTipos(dados) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.parsed.x.toLocaleString("pt-BR") + " ocorrências";
-                        }
-                    }
+                    callbacks: { label: ctx => ctx.parsed.x.toLocaleString("pt-BR") + " ocorrências" }
                 }
             },
             scales: {
-                x: {
-                    beginAtZero: true,
-                    ticks: { color: "#94a3b8" },
-                    grid: { color: "rgba(51, 65, 85, 0.5)" }
-                },
-                y: {
-                    ticks: {
-                        color: "#f1f5f9",
-                        font: { size: 13 },
-                        autoSkip: false   // Garante que todos os 10 nomes apareçam
-                    },
-                    grid: { display: false }
-                }
+                x: { beginAtZero: true, ticks: { color: "#94a3b8" }, grid: { color: "rgba(51, 65, 85, 0.5)" } },
+                y: { ticks: { color: "#f1f5f9", font: { size: 13 }, autoSkip: false }, grid: { display: false } }
             }
         }
     });
 }
 
-// ===== Gráfico 4: Top 15 Equipes (Barras horizontais) =====
 function renderizarGraficoEquipes(dados) {
-    // 1. Contagem por equipe
     const contagem = {};
     dados.forEach(linha => {
         const equipe = (linha.EQUIPE || "Não informada").trim() || "Não informada";
         contagem[equipe] = (contagem[equipe] || 0) + 1;
     });
 
-    // 2. Ordena do maior para o menor
     const equipesOrdenadas = Object.keys(contagem).sort((a, b) => contagem[b] - contagem[a]);
-
-    // 3. Pega apenas as Top 15
     const top15 = equipesOrdenadas.slice(0, 15);
     const valoresTop15 = top15.map(eq => contagem[eq]);
 
-    // 4. Destrói o gráfico antigo (se existir)
     if (graficoEquipes) graficoEquipes.destroy();
-
-    // 5. Cria o novo gráfico
     const ctx = document.getElementById("graficoEquipes").getContext("2d");
 
     graficoEquipes = new Chart(ctx, {
@@ -345,7 +452,7 @@ function renderizarGraficoEquipes(dados) {
             datasets: [{
                 label: "Ocorrências",
                 data: valoresTop15,
-                backgroundColor: "rgba(43, 228, 126, 0.6)",   // roxo/lilás
+                backgroundColor: "rgba(43, 228, 126, 0.6)",
                 borderColor: "rgb(0, 252, 168)",
                 borderWidth: 1,
                 borderRadius: 6
@@ -358,89 +465,43 @@ function renderizarGraficoEquipes(dados) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.parsed.x.toLocaleString("pt-BR") + " ocorrências";
-                        }
-                    }
+                    callbacks: { label: ctx => ctx.parsed.x.toLocaleString("pt-BR") + " ocorrências" }
                 }
             },
             scales: {
-                x: {
-                    beginAtZero: true,
-                    ticks: { color: "#94a3b8" },
-                    grid: { color: "rgba(51, 65, 85, 0.5)" }
-                },
-                y: {
-                    ticks: {
-                        color: "#f1f5f9",
-                        font: { size: 12 },
-                        autoSkip: false
-                    },
-                    grid: { display: false }
-                }
+                x: { beginAtZero: true, ticks: { color: "#94a3b8" }, grid: { color: "rgba(51, 65, 85, 0.5)" } },
+                y: { ticks: { color: "#f1f5f9", font: { size: 12 }, autoSkip: false }, grid: { display: false } }
             }
         }
     });
 }
 
-// ===== Gráfico 6: Volume por Período do Dia (Barras verticais) =====
 function renderizarGraficoPeriodos(dados) {
-    // 1. Classificação conforme regra:
-    //    06:00 a 11:59 → Manhã
-    //    12:00 a 17:59 → Tarde
-    //    18:00 a 05:59 → Noite
     const periodos = ["Manhã", "Tarde", "Noite", "Não informado"];
-    const contagem = {
-        "Manhã": 0,
-        "Tarde": 0,
-        "Noite": 0,
-        "Não informado": 0
-    };
+    const contagem = { "Manhã": 0, "Tarde": 0, "Noite": 0, "Não informado": 0 };
 
     dados.forEach(linha => {
         const inicio = (linha.INICIO || "").trim();
-        if (!inicio) {
-            contagem["Não informado"]++;
-            return;
-        }
-
+        if (!inicio) { contagem["Não informado"]++; return; }
         const partes = inicio.split(":");
-        if (partes.length < 2) {
-            contagem["Não informado"]++;
-            return;
-        }
-
+        if (partes.length < 2) { contagem["Não informado"]++; return; }
         const hora = parseInt(partes[0], 10);
-        if (isNaN(hora)) {
-            contagem["Não informado"]++;
-            return;
-        }
+        if (isNaN(hora)) { contagem["Não informado"]++; return; }
 
-        if (hora >= 6 && hora < 12) {
-            contagem["Manhã"]++;
-        } else if (hora >= 12 && hora < 18) {
-            contagem["Tarde"]++;
-        } else {
-            // 18h às 05h
-            contagem["Noite"]++;
-        }
+        if (hora >= 6 && hora < 12) contagem["Manhã"]++;
+        else if (hora >= 12 && hora < 18) contagem["Tarde"]++;
+        else contagem["Noite"]++;
     });
 
     const valores = periodos.map(p => contagem[p]);
-
-    // 2. Cores por período (manhã = amarelo, tarde = laranja, noite = azul escuro, não informado = cinza)
     const cores = [
-        "rgba(255, 0, 43, 0.78)",    // Manhã - amarelo
-        "rgba(233, 147, 19, 0.73)",    // Tarde - laranja
-        "rgb(194, 187, 86)",    // Noite - azul índigo
-        "rgb(253, 254, 255)"    // Não informado - cinza
+        "rgba(255, 0, 43, 0.78)",
+        "rgba(233, 147, 19, 0.73)",
+        "rgb(194, 187, 86)",
+        "rgb(253, 254, 255)"
     ];
 
-    // 3. Destrói o gráfico antigo
     if (graficoPeriodos) graficoPeriodos.destroy();
-
-    // 4. Cria o gráfico
     const ctx = document.getElementById("graficoPeriodos").getContext("2d");
 
     graficoPeriodos = new Chart(ctx, {
@@ -462,70 +523,38 @@ function renderizarGraficoPeriodos(dados) {
             plugins: {
                 legend: { display: true },
                 tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.parsed.y.toLocaleString("pt-BR") + " ocorrências";
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    ticks: { color: "#f1f5f9", font: { size: 13 } },
-                    grid: { display: false }
-                },
-                y: {
-                    beginAtZero: true,
-                    ticks: { color: "#94a3b8" },
-                    grid: { color: "rgba(51, 65, 85, 0.5)" }
+                    callbacks: { label: ctx => ctx.parsed.toLocaleString("pt-BR") + " ocorrências" }
                 }
             }
         }
     });
 }
 
-// ===== Gráfico 5: Volume por Dia da Semana (Barras verticais) =====
 function renderizarGraficoDias(dados) {
     const nomesDias = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
-
-    // Inicializa contagem com zero
     const contagem = [0, 0, 0, 0, 0, 0, 0];
 
     dados.forEach(linha => {
         const dataStr = (linha.DATA || "").trim();
         if (!dataStr) return;
-
         const partes = dataStr.split("/");
         if (partes.length !== 3) return;
 
         const dia = parseInt(partes[0], 10);
-        const mes = parseInt(partes[1], 10) - 1;   // Mês no JS é 0-11
+        const mes = parseInt(partes[1], 10) - 1;
         const ano = parseInt(partes[2], 10);
 
         const dataObj = new Date(ano, mes, dia);
         if (isNaN(dataObj.getTime())) return;
 
-        const diaSemana = dataObj.getDay();  // 0 = Domingo, 1 = Segunda...
-        contagem[diaSemana]++;
+        contagem[dataObj.getDay()]++;
     });
 
-    // Reordena para começar na Segunda
     const ordemExibicao = [1, 2, 3, 4, 5, 6, 0];
     const labelsExibicao = ordemExibicao.map(i => nomesDias[i]);
     const valoresExibicao = ordemExibicao.map(i => contagem[i]);
 
-    // Destaca o dia com mais ocorrências
-    const maiorValor = Math.max(...valoresExibicao);
-    const coresBarras = valoresExibicao.map(v =>
-        v === maiorValor
-            ? "rgba(131, 46, 243, 0.6)"
-            : "rgba(131, 46, 243, 0.6)"
-    );
-
-    // Destrói o gráfico antigo
     if (graficoDias) graficoDias.destroy();
-
-    // Cria o gráfico
     const ctx = document.getElementById("graficoDias").getContext("2d");
 
     graficoDias = new Chart(ctx, {
@@ -535,7 +564,7 @@ function renderizarGraficoDias(dados) {
             datasets: [{
                 label: "Ocorrências",
                 data: valoresExibicao,
-                backgroundColor: coresBarras,
+                backgroundColor: "rgba(131, 46, 243, 0.6)",
                 borderColor: "rgba(173, 0, 253, 0.54)",
                 borderWidth: 1,
                 borderRadius: 8
@@ -547,26 +576,16 @@ function renderizarGraficoDias(dados) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.parsed.y.toLocaleString("pt-BR") + " ocorrências";
-                        }
-                    }
+                    callbacks: { label: ctx => ctx.parsed.y.toLocaleString("pt-BR") + " ocorrências" }
                 }
             },
             scales: {
-                x: {
-                    ticks: { color: "#f1f5f9", font: { size: 13 } },
-                    grid: { display: false }
-                },
-                y: {
-                    beginAtZero: true,
-                    ticks: { color: "#94a3b8" },
-                    grid: { color: "rgba(51, 65, 85, 0.5)" }
-                }
+                x: { ticks: { color: "#f1f5f9", font: { size: 13 } }, grid: { display: false } },
+                y: { beginAtZero: true, ticks: { color: "#94a3b8" }, grid: { color: "rgba(51, 65, 85, 0.5)" } }
             }
         }
     });
 }
-// ===== Inicia quando a página carregar =====
+
+// ===== Inicia =====
 iniciarDashboard();
