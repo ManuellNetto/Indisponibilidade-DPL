@@ -2,12 +2,28 @@
 const ARQUIVO_CSV = "dados.csv";
 const FILTRO_PADRAO = "GSTC";
 
+// ===== Registra o plugin de datalabels UMA vez, globalmente =====
+Chart.register(ChartDataLabels);
+
+// Desativa datalabels por padrão (só ligamos nos gráficos que queremos)
+Chart.defaults.plugins.datalabels = { display: false };
+
 // ===== Estado global =====
 let dadosCompletos = [];
 let filtroGerencia = FILTRO_PADRAO;
 let filtroMes = "TODOS";
 let filtroSeccional = "TODAS";
 let filtroSegmento = "TODOS";
+
+// Filtros cruzados (cliques nos gráficos)
+let filtrosCruzados = {
+    base: null,
+    faixa: null,
+    tipo: null,
+    equipe: null,
+    diaSemana: null,
+    periodo: null
+};
 
 // Gráficos
 let graficoBase = null;
@@ -22,6 +38,19 @@ const MESES_NOMES = [
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
 ];
 
+const NOMES_DIAS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+
+// ===== Configuração padrão do datalabels (rótulo puro, na ponta externa) =====
+const DATALABELS_HORIZONTAL = {
+    display: true,
+    color: "#f1f5f9",
+    font: { weight: "600", size: 12 },
+    anchor: "end",
+    align: "right",
+    offset: 4,
+    formatter: (value) => Number(value).toLocaleString("pt-BR")
+};
+
 // ===== Função principal =====
 function iniciarDashboard() {
     Papa.parse(ARQUIVO_CSV, {
@@ -33,12 +62,11 @@ function iniciarDashboard() {
             if (resultado.errors.length > 0) {
                 console.error("Erros ao ler o CSV:", resultado.errors);
             }
-
             dadosCompletos = resultado.data;
             console.log("Total de linhas lidas do CSV:", dadosCompletos.length);
 
             configurarFiltrosGerencia();
-            atualizarOpcoesFiltros();   // popula selects com base no filtro inicial
+            atualizarOpcoesFiltros();
             aplicarFiltros();
         },
         error: function (erro) {
@@ -50,30 +78,50 @@ function iniciarDashboard() {
     });
 }
 
-// ===== Extrai o mês (ex: "03/2026") da coluna DATA =====
+// ===== Helpers de data/hora =====
 function extrairMes(linha) {
     const dataStr = (linha.DATA || "").trim();
     if (!dataStr) return null;
-
     const partes = dataStr.split("/");
     if (partes.length !== 3) return null;
-
     const mes = parseInt(partes[1], 10);
     const ano = partes[2];
     if (isNaN(mes) || mes < 1 || mes > 12) return null;
-
-    // Retorna algo como "2026-03" para ordenar corretamente
     return `${ano}-${String(mes).padStart(2, "0")}`;
 }
 
-// ===== Converte "2026-03" em "Março/2026" =====
 function formatarMes(mesChave) {
     if (!mesChave || mesChave === "TODOS") return "Todos";
     const [ano, mes] = mesChave.split("-");
     return `${MESES_NOMES[parseInt(mes, 10) - 1]}/${ano}`;
 }
 
-// ===== Botões de gerência =====
+function extrairDiaSemana(linha) {
+    const dataStr = (linha.DATA || "").trim();
+    if (!dataStr) return null;
+    const partes = dataStr.split("/");
+    if (partes.length !== 3) return null;
+    const dia = parseInt(partes[0], 10);
+    const mes = parseInt(partes[1], 10) - 1;
+    const ano = parseInt(partes[2], 10);
+    const dataObj = new Date(ano, mes, dia);
+    if (isNaN(dataObj.getTime())) return null;
+    return dataObj.getDay();
+}
+
+function extrairPeriodo(linha) {
+    const inicio = (linha.INICIO || "").trim();
+    if (!inicio) return null;
+    const partes = inicio.split(":");
+    if (partes.length < 2) return null;
+    const hora = parseInt(partes[0], 10);
+    if (isNaN(hora)) return null;
+    if (hora >= 6 && hora < 12) return "Manhã";
+    if (hora >= 12 && hora < 18) return "Tarde";
+    return "Noite";
+}
+
+// ===== Botões de gerência + listeners dos selects =====
 function configurarFiltrosGerencia() {
     const botoes = document.querySelectorAll(".filtro-btn");
 
@@ -84,21 +132,21 @@ function configurarFiltrosGerencia() {
 
             filtroGerencia = this.getAttribute("data-filtro");
 
-            // Reset dos filtros dependentes ao trocar gerência
             filtroMes = "TODOS";
             filtroSeccional = "TODAS";
             filtroSegmento = "TODOS";
+            limparFiltrosCruzados(false);
 
             atualizarOpcoesFiltros();
             aplicarFiltros();
         });
     });
 
-    // Listeners dos selects
     document.getElementById("filtroMes").addEventListener("change", function () {
         filtroMes = this.value;
         filtroSeccional = "TODAS";
         filtroSegmento = "TODOS";
+        limparFiltrosCruzados(false);
         atualizarOpcoesFiltros();
         aplicarFiltros();
     });
@@ -106,17 +154,23 @@ function configurarFiltrosGerencia() {
     document.getElementById("filtroSeccional").addEventListener("change", function () {
         filtroSeccional = this.value;
         filtroSegmento = "TODOS";
+        limparFiltrosCruzados(false);
         atualizarOpcoesFiltros();
         aplicarFiltros();
     });
 
     document.getElementById("filtroSegmento").addEventListener("change", function () {
         filtroSegmento = this.value;
+        limparFiltrosCruzados(false);
         aplicarFiltros();
+    });
+
+    document.getElementById("btnLimparCruzados").addEventListener("click", function () {
+        limparFiltrosCruzados(true);
     });
 }
 
-// ===== Retorna os dados já filtrados por gerência + mês (base para popular selects) =====
+// ===== Dados filtrados apenas por gerência/mês (para popular selects) =====
 function dadosParaPopularSelects() {
     let dados = dadosCompletos;
 
@@ -125,11 +179,9 @@ function dadosParaPopularSelects() {
             (linha.GERENCIA || "").trim().toUpperCase() === filtroGerencia.toUpperCase()
         );
     }
-
     if (filtroMes !== "TODOS") {
         dados = dados.filter(linha => extrairMes(linha) === filtroMes);
     }
-
     return dados;
 }
 
@@ -138,10 +190,7 @@ function atualizarOpcoesFiltros() {
     const baseParaSelects = dadosParaPopularSelects();
 
     // --- MÊS ---
-    const mesesUnicos = [...new Set(
-        baseParaSelects.map(extrairMes).filter(Boolean)
-    )].sort();
-
+    const mesesUnicos = [...new Set(baseParaSelects.map(extrairMes).filter(Boolean))].sort();
     const selectMes = document.getElementById("filtroMes");
     const valorMesAnterior = filtroMes;
     selectMes.innerHTML = '<option value="TODOS">Todos</option>';
@@ -154,17 +203,14 @@ function atualizarOpcoesFiltros() {
     selectMes.value = mesesUnicos.includes(valorMesAnterior) ? valorMesAnterior : "TODOS";
     filtroMes = selectMes.value;
 
-    // --- SECCIONAL (base) ---
-    // Aplicamos também o filtro de mês para refinar as seccionais disponíveis
+    // --- SECCIONAL ---
     let baseParaSeccional = baseParaSelects;
     if (filtroMes !== "TODOS") {
         baseParaSeccional = baseParaSeccional.filter(linha => extrairMes(linha) === filtroMes);
     }
-
     const seccionaisUnicas = [...new Set(
         baseParaSeccional.map(linha => (linha.base || "").trim()).filter(Boolean)
     )].sort();
-
     const selectSeccional = document.getElementById("filtroSeccional");
     const valorSeccionalAnterior = filtroSeccional;
     selectSeccional.innerHTML = '<option value="TODAS">Todas</option>';
@@ -186,11 +232,9 @@ function atualizarOpcoesFiltros() {
             (linha.base || "").trim() === filtroSeccional
         );
     }
-
     const segmentosUnicos = [...new Set(
         baseParaSegmento.map(linha => (linha.SEGMENTO || "").trim()).filter(Boolean)
     )].sort();
-
     const selectSegmento = document.getElementById("filtroSegmento");
     const valorSegmentoAnterior = filtroSegmento;
     selectSegmento.innerHTML = '<option value="TODOS">Todos</option>';
@@ -206,40 +250,64 @@ function atualizarOpcoesFiltros() {
     filtroSegmento = selectSegmento.value;
 }
 
-// ===== Aplica TODOS os filtros e renderiza =====
+// ===== Aplica TODOS os filtros (nativos + cruzados) =====
 function aplicarFiltros() {
     let dadosFiltrados = dadosCompletos;
 
-    // 1. Gerência
+    // Filtros nativos
     if (filtroGerencia !== "TODAS") {
         dadosFiltrados = dadosFiltrados.filter(linha =>
             (linha.GERENCIA || "").trim().toUpperCase() === filtroGerencia.toUpperCase()
         );
     }
-
-    // 2. Mês
     if (filtroMes !== "TODOS") {
         dadosFiltrados = dadosFiltrados.filter(linha => extrairMes(linha) === filtroMes);
     }
-
-    // 3. Seccional (base)
     if (filtroSeccional !== "TODAS") {
         dadosFiltrados = dadosFiltrados.filter(linha =>
             (linha.base || "").trim() === filtroSeccional
         );
     }
-
-    // 4. Segmento
     if (filtroSegmento !== "TODOS") {
         dadosFiltrados = dadosFiltrados.filter(linha =>
             (linha.SEGMENTO || "").trim() === filtroSegmento
         );
     }
 
-    // Texto informativo
-    atualizarInfoFiltro(dadosFiltrados.length);
+    // Filtros cruzados
+    if (filtrosCruzados.base) {
+        dadosFiltrados = dadosFiltrados.filter(linha =>
+            (linha.base || "").trim() === filtrosCruzados.base
+        );
+    }
+    if (filtrosCruzados.faixa) {
+        dadosFiltrados = dadosFiltrados.filter(linha =>
+            (linha.faixa_indisp || "").trim() === filtrosCruzados.faixa
+        );
+    }
+    if (filtrosCruzados.tipo) {
+        dadosFiltrados = dadosFiltrados.filter(linha =>
+            (linha.TIPO_DE_INDISPONIBILIDADE || "").trim() === filtrosCruzados.tipo
+        );
+    }
+    if (filtrosCruzados.equipe) {
+        dadosFiltrados = dadosFiltrados.filter(linha =>
+            (linha.EQUIPE || "").trim() === filtrosCruzados.equipe
+        );
+    }
+    if (filtrosCruzados.diaSemana !== null && filtrosCruzados.diaSemana !== undefined) {
+        dadosFiltrados = dadosFiltrados.filter(linha =>
+            extrairDiaSemana(linha) === filtrosCruzados.diaSemana
+        );
+    }
+    if (filtrosCruzados.periodo) {
+        dadosFiltrados = dadosFiltrados.filter(linha =>
+            extrairPeriodo(linha) === filtrosCruzados.periodo
+        );
+    }
 
-    console.log(`Filtros → Gerência: ${filtroGerencia} | Mês: ${filtroMes} | Seccional: ${filtroSeccional} | Segmento: ${filtroSegmento} | Registros: ${dadosFiltrados.length}`);
+    atualizarInfoFiltro(dadosFiltrados.length);
+    renderizarChipsCruzados();
 
     renderizarCards(dadosFiltrados);
     renderizarGraficoBase(dadosFiltrados);
@@ -250,22 +318,84 @@ function aplicarFiltros() {
     renderizarGraficoDias(dadosFiltrados);
 }
 
-// ===== Monta o texto "Exibindo: ..." =====
+// ===== Texto "Exibindo: ..." =====
 function atualizarInfoFiltro(qtd) {
     const partes = [];
-
-    if (filtroGerencia === "TODAS") {
-        partes.push("Todas as gerências");
-    } else {
-        partes.push(filtroGerencia);
-    }
-
+    partes.push(filtroGerencia === "TODAS" ? "Todas as gerências" : filtroGerencia);
     if (filtroMes !== "TODOS") partes.push(formatarMes(filtroMes));
     if (filtroSeccional !== "TODAS") partes.push("Secc: " + filtroSeccional);
     if (filtroSegmento !== "TODOS") partes.push("Seg: " + filtroSegmento);
 
     document.getElementById("infoFiltro").textContent =
         `Exibindo: ${partes.join(" • ")} (${qtd.toLocaleString("pt-BR")} registros)`;
+}
+
+// ===== Chips de filtros cruzados =====
+function renderizarChipsCruzados() {
+    const area = document.getElementById("areaChipsCruzados");
+    const lista = document.getElementById("listaChips");
+    lista.innerHTML = "";
+
+    const mapaLabels = {
+        base: "Base",
+        faixa: "Faixa",
+        tipo: "Tipo",
+        equipe: "Equipe",
+        diaSemana: "Dia",
+        periodo: "Período"
+    };
+
+    let temAlgum = false;
+
+    Object.keys(filtrosCruzados).forEach(chave => {
+        const valor = filtrosCruzados[chave];
+        if (valor === null || valor === undefined) return;
+        temAlgum = true;
+
+        let textoValor = valor;
+        if (chave === "diaSemana") textoValor = NOMES_DIAS[valor];
+
+        const chip = document.createElement("div");
+        chip.className = "chip";
+        chip.innerHTML = `
+            <span>${mapaLabels[chave]}: <strong>${textoValor}</strong></span>
+            <button class="chip-remover" data-chave="${chave}" title="Remover filtro">✕</button>
+        `;
+        lista.appendChild(chip);
+    });
+
+    area.style.display = temAlgum ? "flex" : "none";
+
+    lista.querySelectorAll(".chip-remover").forEach(btn => {
+        btn.addEventListener("click", function () {
+            const chave = this.getAttribute("data-chave");
+            filtrosCruzados[chave] = null;
+            aplicarFiltros();
+        });
+    });
+}
+
+// ===== Limpar filtros cruzados =====
+function limparFiltrosCruzados(reRenderizar) {
+    filtrosCruzados = {
+        base: null,
+        faixa: null,
+        tipo: null,
+        equipe: null,
+        diaSemana: null,
+        periodo: null
+    };
+    if (reRenderizar) aplicarFiltros();
+}
+
+// ===== Alterna um filtro cruzado (clicou de novo = remove) =====
+function alternarFiltroCruzado(chave, valor) {
+    if (filtrosCruzados[chave] === valor) {
+        filtrosCruzados[chave] = null;
+    } else {
+        filtrosCruzados[chave] = valor;
+    }
+    aplicarFiltros();
 }
 
 // ===== Renderiza os 3 cards =====
@@ -286,9 +416,10 @@ function renderizarCards(dados) {
 }
 
 /* =========================================================
-   GRÁFICOS — o código abaixo é o mesmo que você já tinha
+   GRÁFICOS
    ========================================================= */
 
+// ====== 1. Volume por Base ======
 function renderizarGraficoBase(dados) {
     const contagem = {};
     dados.forEach(linha => {
@@ -296,8 +427,8 @@ function renderizarGraficoBase(dados) {
         contagem[base] = (contagem[base] || 0) + 1;
     });
 
-    const basesOrdenadas = Object.keys(contagem).sort((a, b) => contagem[b] - contagem[a]);
-    const valoresOrdenados = basesOrdenadas.map(base => contagem[base]);
+    const labels = Object.keys(contagem).sort((a, b) => contagem[b] - contagem[a]);
+    const valores = labels.map(base => contagem[base]);
 
     if (graficoBase) graficoBase.destroy();
     const ctx = document.getElementById("graficoBase").getContext("2d");
@@ -305,10 +436,10 @@ function renderizarGraficoBase(dados) {
     graficoBase = new Chart(ctx, {
         type: "bar",
         data: {
-            labels: basesOrdenadas,
+            labels: labels,
             datasets: [{
                 label: "Ocorrências",
-                data: valoresOrdenados,
+                data: valores,
                 backgroundColor: "rgba(0, 17, 252, 0.62)",
                 borderColor: "rgb(0, 17, 252)",
                 borderWidth: 1,
@@ -319,12 +450,15 @@ function renderizarGraficoBase(dados) {
             indexAxis: "y",
             responsive: true,
             maintainAspectRatio: false,
+            onClick: (evt, elements) => {
+                if (!elements.length) return;
+                alternarFiltroCruzado("base", labels[elements[0].index]);
+            },
             plugins: {
                 legend: { display: false },
+                datalabels: { ...DATALABELS_HORIZONTAL },
                 tooltip: {
-                    callbacks: {
-                        label: ctx => ctx.parsed.x.toLocaleString("pt-BR") + " ocorrências"
-                    }
+                    callbacks: { label: ctx => ctx.parsed.x.toLocaleString("pt-BR") + " ocorrências" }
                 }
             },
             scales: {
@@ -335,6 +469,7 @@ function renderizarGraficoBase(dados) {
     });
 }
 
+// ====== 2. Faixa de Indisponibilidade ======
 function renderizarGraficoFaixa(dados) {
     const ordemFaixas = ["< 2h", "2 a 4h", "4 a 6h", "> 6h"];
     const contagem = {};
@@ -372,6 +507,10 @@ function renderizarGraficoFaixa(dados) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            onClick: (evt, elements) => {
+                if (!elements.length) return;
+                alternarFiltroCruzado("faixa", ordemFaixas[elements[0].index]);
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -386,6 +525,7 @@ function renderizarGraficoFaixa(dados) {
     });
 }
 
+// ====== 3. Top 10 Tipos ======
 function renderizarGraficoTipos(dados) {
     const contagem = {};
     dados.forEach(linha => {
@@ -393,9 +533,8 @@ function renderizarGraficoTipos(dados) {
         contagem[tipo] = (contagem[tipo] || 0) + 1;
     });
 
-    const tiposOrdenados = Object.keys(contagem).sort((a, b) => contagem[b] - contagem[a]);
-    const top10 = tiposOrdenados.slice(0, 10);
-    const valoresTop10 = top10.map(tipo => contagem[tipo]);
+    const labels = Object.keys(contagem).sort((a, b) => contagem[b] - contagem[a]).slice(0, 10);
+    const valores = labels.map(tipo => contagem[tipo]);
 
     if (graficoTipos) graficoTipos.destroy();
     const ctx = document.getElementById("graficoTipos").getContext("2d");
@@ -403,10 +542,10 @@ function renderizarGraficoTipos(dados) {
     graficoTipos = new Chart(ctx, {
         type: "bar",
         data: {
-            labels: top10,
+            labels: labels,
             datasets: [{
                 label: "Ocorrências",
-                data: valoresTop10,
+                data: valores,
                 backgroundColor: "rgba(255, 52, 1, 0.66)",
                 borderColor: "rgba(184, 48, 6, 0.97)",
                 borderWidth: 1,
@@ -417,8 +556,13 @@ function renderizarGraficoTipos(dados) {
             indexAxis: "y",
             responsive: true,
             maintainAspectRatio: false,
+            onClick: (evt, elements) => {
+                if (!elements.length) return;
+                alternarFiltroCruzado("tipo", labels[elements[0].index]);
+            },
             plugins: {
                 legend: { display: false },
+                datalabels: { ...DATALABELS_HORIZONTAL },
                 tooltip: {
                     callbacks: { label: ctx => ctx.parsed.x.toLocaleString("pt-BR") + " ocorrências" }
                 }
@@ -431,6 +575,7 @@ function renderizarGraficoTipos(dados) {
     });
 }
 
+// ====== 4. Top 15 Equipes ======
 function renderizarGraficoEquipes(dados) {
     const contagem = {};
     dados.forEach(linha => {
@@ -438,9 +583,8 @@ function renderizarGraficoEquipes(dados) {
         contagem[equipe] = (contagem[equipe] || 0) + 1;
     });
 
-    const equipesOrdenadas = Object.keys(contagem).sort((a, b) => contagem[b] - contagem[a]);
-    const top15 = equipesOrdenadas.slice(0, 15);
-    const valoresTop15 = top15.map(eq => contagem[eq]);
+    const labels = Object.keys(contagem).sort((a, b) => contagem[b] - contagem[a]).slice(0, 15);
+    const valores = labels.map(eq => contagem[eq]);
 
     if (graficoEquipes) graficoEquipes.destroy();
     const ctx = document.getElementById("graficoEquipes").getContext("2d");
@@ -448,10 +592,10 @@ function renderizarGraficoEquipes(dados) {
     graficoEquipes = new Chart(ctx, {
         type: "bar",
         data: {
-            labels: top15,
+            labels: labels,
             datasets: [{
                 label: "Ocorrências",
-                data: valoresTop15,
+                data: valores,
                 backgroundColor: "rgba(43, 228, 126, 0.6)",
                 borderColor: "rgb(0, 252, 168)",
                 borderWidth: 1,
@@ -462,8 +606,13 @@ function renderizarGraficoEquipes(dados) {
             indexAxis: "y",
             responsive: true,
             maintainAspectRatio: false,
+            onClick: (evt, elements) => {
+                if (!elements.length) return;
+                alternarFiltroCruzado("equipe", labels[elements[0].index]);
+            },
             plugins: {
                 legend: { display: false },
+                datalabels: { ...DATALABELS_HORIZONTAL },
                 tooltip: {
                     callbacks: { label: ctx => ctx.parsed.x.toLocaleString("pt-BR") + " ocorrências" }
                 }
@@ -476,29 +625,22 @@ function renderizarGraficoEquipes(dados) {
     });
 }
 
+// ====== 5. Volume por Período do Dia ======
+// "Não informado" foi removido — apenas Manhã / Tarde / Noite
 function renderizarGraficoPeriodos(dados) {
-    const periodos = ["Manhã", "Tarde", "Noite", "Não informado"];
-    const contagem = { "Manhã": 0, "Tarde": 0, "Noite": 0, "Não informado": 0 };
+    const periodos = ["Manhã", "Tarde", "Noite"];
+    const contagem = { "Manhã": 0, "Tarde": 0, "Noite": 0 };
 
     dados.forEach(linha => {
-        const inicio = (linha.INICIO || "").trim();
-        if (!inicio) { contagem["Não informado"]++; return; }
-        const partes = inicio.split(":");
-        if (partes.length < 2) { contagem["Não informado"]++; return; }
-        const hora = parseInt(partes[0], 10);
-        if (isNaN(hora)) { contagem["Não informado"]++; return; }
-
-        if (hora >= 6 && hora < 12) contagem["Manhã"]++;
-        else if (hora >= 12 && hora < 18) contagem["Tarde"]++;
-        else contagem["Noite"]++;
+        const p = extrairPeriodo(linha);
+        if (p) contagem[p]++;
     });
 
     const valores = periodos.map(p => contagem[p]);
     const cores = [
         "rgba(255, 0, 43, 0.78)",
         "rgba(233, 147, 19, 0.73)",
-        "rgb(194, 187, 86)",
-        "rgb(253, 254, 255)"
+        "rgb(194, 187, 86)"
     ];
 
     if (graficoPeriodos) graficoPeriodos.destroy();
@@ -520,6 +662,10 @@ function renderizarGraficoPeriodos(dados) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            onClick: (evt, elements) => {
+                if (!elements.length) return;
+                alternarFiltroCruzado("periodo", periodos[elements[0].index]);
+            },
             plugins: {
                 legend: { display: true },
                 tooltip: {
@@ -530,28 +676,18 @@ function renderizarGraficoPeriodos(dados) {
     });
 }
 
+// ====== 6. Volume por Dia da Semana ======
 function renderizarGraficoDias(dados) {
-    const nomesDias = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
     const contagem = [0, 0, 0, 0, 0, 0, 0];
 
     dados.forEach(linha => {
-        const dataStr = (linha.DATA || "").trim();
-        if (!dataStr) return;
-        const partes = dataStr.split("/");
-        if (partes.length !== 3) return;
-
-        const dia = parseInt(partes[0], 10);
-        const mes = parseInt(partes[1], 10) - 1;
-        const ano = parseInt(partes[2], 10);
-
-        const dataObj = new Date(ano, mes, dia);
-        if (isNaN(dataObj.getTime())) return;
-
-        contagem[dataObj.getDay()]++;
+        const dia = extrairDiaSemana(linha);
+        if (dia !== null) contagem[dia]++;
     });
 
+    // Ordem de exibição: Segunda → Domingo
     const ordemExibicao = [1, 2, 3, 4, 5, 6, 0];
-    const labelsExibicao = ordemExibicao.map(i => nomesDias[i]);
+    const labelsExibicao = ordemExibicao.map(i => NOMES_DIAS[i]);
     const valoresExibicao = ordemExibicao.map(i => contagem[i]);
 
     if (graficoDias) graficoDias.destroy();
@@ -573,6 +709,11 @@ function renderizarGraficoDias(dados) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            onClick: (evt, elements) => {
+                if (!elements.length) return;
+                const idxExibicao = elements[0].index;
+                alternarFiltroCruzado("diaSemana", ordemExibicao[idxExibicao]);
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
