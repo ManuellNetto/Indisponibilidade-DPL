@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 </head>
 <body>
 
@@ -23,40 +24,46 @@
     <main class="conteudo">
 
         <!-- Barra de filtros -->
-<!-- Barra de filtros -->
-<section class="filtros">
-    <div class="filtro-grupo">
-        <span class="filtros-label">Gerência:</span>
-        <div class="filtros-botoes">
-            <button class="filtro-btn ativo" data-filtro="GSTC">GSTC</button>
-            <button class="filtro-btn" data-filtro="GEOM">GEOM</button>
-            <button class="filtro-btn" data-filtro="TODAS">Todas</button>
-        </div>
-    </div>
+        <section class="filtros">
+            <div class="filtro-grupo">
+                <span class="filtros-label">Gerência:</span>
+                <div class="filtros-botoes">
+                    <button class="filtro-btn ativo" data-filtro="GSTC">GSTC</button>
+                    <button class="filtro-btn" data-filtro="GEOM">GEOM</button>
+                    <button class="filtro-btn" data-filtro="TODAS">Todas</button>
+                </div>
+            </div>
 
-    <div class="filtro-grupo">
-        <span class="filtros-label">Mês:</span>
-        <select id="filtroMes" class="filtro-select">
-            <option value="TODOS">Todos</option>
-        </select>
-    </div>
+            <div class="filtro-grupo">
+                <span class="filtros-label">Mês:</span>
+                <select id="filtroMes" class="filtro-select">
+                    <option value="TODOS">Todos</option>
+                </select>
+            </div>
 
-    <div class="filtro-grupo">
-        <span class="filtros-label">Seccional:</span>
-        <select id="filtroSeccional" class="filtro-select">
-            <option value="TODAS">Todas</option>
-        </select>
-    </div>
+            <div class="filtro-grupo">
+                <span class="filtros-label">Seccional:</span>
+                <select id="filtroSeccional" class="filtro-select">
+                    <option value="TODAS">Todas</option>
+                </select>
+            </div>
 
-    <div class="filtro-grupo">
-        <span class="filtros-label">Segmento:</span>
-        <select id="filtroSegmento" class="filtro-select">
-            <option value="TODOS">Todos</option>
-        </select>
-    </div>
+            <div class="filtro-grupo">
+                <span class="filtros-label">Segmento:</span>
+                <select id="filtroSegmento" class="filtro-select">
+                    <option value="TODOS">Todos</option>
+                </select>
+            </div>
 
-    <span class="filtros-info" id="infoFiltro">Exibindo: GSTC</span>
-</section>
+            <span class="filtros-info" id="infoFiltro">Exibindo: GSTC</span>
+        </section>
+
+        <!-- Chips de filtros cruzados -->
+        <section class="chips-cruzados" id="areaChipsCruzados" style="display: none;">
+            <span class="chips-label">Filtros ativos (clique nos gráficos):</span>
+            <div class="chips-lista" id="listaChips"></div>
+            <button class="btn-limpar-cruzados" id="btnLimparCruzados">Limpar cruzados</button>
+        </section>
 
         <!-- Cards de totais -->
         <section class="cards">
@@ -77,61 +84,53 @@
             </div>
         </section>
 
-        <!-- Área de gráficos (próximas etapas) -->
-        <!-- Área de gráficos -->
         <!-- Área de gráficos -->
         <section class="graficos" id="areaGraficos">
 
-    <!-- Gráfico 1: Volume por Base -->
             <div class="card-grafico">
                 <h2 class="grafico-titulo">Volume por Base</h2>
-            <div class="grafico-wrapper">
-                <canvas id="graficoBase"></canvas>
-            </div>
+                <div class="grafico-wrapper">
+                    <canvas id="graficoBase"></canvas>
+                </div>
             </div>
 
-    <!-- Gráfico 2: Quantidade por Faixa de Indisponibilidade -->
             <div class="card-grafico">
                 <h2 class="grafico-titulo">Quantidade por Faixa de Indisponibilidade</h2>
-            <div class="grafico-wrapper">
-                <canvas id="graficoFaixa"></canvas>
-            </div>
+                <div class="grafico-wrapper">
+                    <canvas id="graficoFaixa"></canvas>
+                </div>
             </div>
 
-    <!-- Gráfico 3: Tipos de Indisponibilidades (largura total) -->
             <div class="card-grafico card-grafico-full">
                 <h2 class="grafico-titulo">Top 10 Tipos de Indisponibilidade</h2>
-            <div class="grafico-wrapper">
-                <canvas id="graficoTipos"></canvas>
+                <div class="grafico-wrapper">
+                    <canvas id="graficoTipos"></canvas>
+                </div>
             </div>
-            </div>
-    <!-- Gráfico 4: Equipes com mais indisponibilidade -->
+
             <div class="card-grafico card-grafico-full">
                 <h2 class="grafico-titulo">Top 15 Equipes com Mais Indisponibilidades</h2>
-            <div class="grafico-wrapper">
-                <canvas id="graficoEquipes"></canvas>
-            </div>
+                <div class="grafico-wrapper">
+                    <canvas id="graficoEquipes"></canvas>
+                </div>
             </div>
 
-    <!-- Gráfico 5: Dias da semana com mais volume -->
             <div class="card-grafico">
                 <h2 class="grafico-titulo">Volume por Dia da Semana</h2>
-            <div class="grafico-wrapper">
-                <canvas id="graficoDias"></canvas>
-            </div>
+                <div class="grafico-wrapper">
+                    <canvas id="graficoDias"></canvas>
+                </div>
             </div>
 
-    <!-- Gráfico 6: Volume por Período do Dia -->
             <div class="card-grafico">
                 <h2 class="grafico-titulo">Volume por Período do Dia</h2>
-            <div class="grafico-wrapper">
-                <canvas id="graficoPeriodos"></canvas>
-            </div>
+                <div class="grafico-wrapper">
+                    <canvas id="graficoPeriodos"></canvas>
+                </div>
             </div>
 
         </section>
 
-    
     </main>
 
     <script src="script.js"></script>
