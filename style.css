@@ -283,3 +283,89 @@ body {
     background-color: var(--fundo-card);
     color: var(--texto-principal);
 }
+
+/* ===== Chips de filtros cruzados ===== */
+.chips-cruzados {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding: 12px 20px;
+    background-color: var(--fundo-card);
+    border: 1px solid var(--borda-sutil);
+    border-radius: 12px;
+    flex-wrap: wrap;
+}
+
+.chips-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--texto-secundario);
+    font-weight: 600;
+}
+
+.chips-lista {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background-color: rgba(0, 132, 252, 0.15);
+    color: var(--texto-principal);
+    border: 1px solid rgba(0, 132, 252, 0.5);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.chip:hover {
+    background-color: rgba(0, 132, 252, 0.28);
+}
+
+.chip .chip-remover {
+    background: transparent;
+    border: none;
+    color: var(--texto-principal);
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 2px;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+.chip .chip-remover:hover {
+    opacity: 1;
+    color: #ff6b6b;
+}
+
+.btn-limpar-cruzados {
+    margin-left: auto;
+    background-color: transparent;
+    color: var(--texto-secundario);
+    border: 1px solid var(--borda-sutil);
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btn-limpar-cruzados:hover {
+    color: var(--texto-principal);
+    border-color: #ff6b6b;
+}
+
+/* Cursor de "clicável" nos gráficos interativos */
+.card-grafico canvas {
+    cursor: pointer;
+}
