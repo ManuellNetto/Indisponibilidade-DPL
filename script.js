@@ -40,6 +40,24 @@ const MESES_NOMES = [
 
 const NOMES_DIAS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
+
+// Configuração do datalabels para barras VERTICAIS (rótulo em cima da barra)
+const DATALABELS_VERTICAL = {
+    display: true,
+    color: "#f1f5f9",
+    font: { weight: "600", size: 12 },
+    anchor: "end",
+    align: "top",
+    offset: 4,
+    backgroundColor: "rgba(30, 41, 59, 0.85)",
+    borderRadius: 4,
+    padding: { top: 3, bottom: 3, left: 6, right: 6 },
+    formatter: (value) => Number(value).toLocaleString("pt-BR")
+};
+
+
+
+
 // ===== Configuração padrão do datalabels (rótulo puro, na ponta externa) =====
 const DATALABELS_HORIZONTAL = {
     display: true,
@@ -461,10 +479,15 @@ function renderizarGraficoBase(dados) {
                     callbacks: { label: ctx => ctx.parsed.x.toLocaleString("pt-BR") + " ocorrências" }
                 }
             },
-            scales: {
-                x: { beginAtZero: true, ticks: { color: "#94a3b8" }, grid: { color: "rgba(51, 65, 85, 0.5)" } },
-                y: { ticks: { color: "#f1f5f9", font: { size: 13 } }, grid: { display: false } }
-            }
+          scales: {
+    x: {
+        beginAtZero: true,
+        suggestedMax: Math.max(...valores) * 1.1,   // 👈 adiciona isto
+        ticks: { color: "#94a3b8" },
+        grid: { color: "rgba(51, 65, 85, 0.5)" }
+    },
+    y: { ticks: { color: "#f1f5f9", font: { size: 13 } }, grid: { display: false } }
+}
         }
     });
 }
@@ -567,10 +590,15 @@ function renderizarGraficoTipos(dados) {
                     callbacks: { label: ctx => ctx.parsed.x.toLocaleString("pt-BR") + " ocorrências" }
                 }
             },
-            scales: {
-                x: { beginAtZero: true, ticks: { color: "#94a3b8" }, grid: { color: "rgba(51, 65, 85, 0.5)" } },
-                y: { ticks: { color: "#f1f5f9", font: { size: 13 }, autoSkip: false }, grid: { display: false } }
-            }
+           scales: {
+    x: {
+        beginAtZero: true,
+        suggestedMax: Math.max(...valores) * 1.0,   // 👈 adiciona isto
+        ticks: { color: "#94a3b8" },
+        grid: { color: "rgba(51, 65, 85, 0.5)" }
+    },
+    y: { ticks: { color: "#f1f5f9", font: { size: 13 } }, grid: { display: false } }
+}
         }
     });
 }
@@ -707,24 +735,30 @@ function renderizarGraficoDias(dados) {
             }]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            onClick: (evt, elements) => {
-                if (!elements.length) return;
-                const idxExibicao = elements[0].index;
-                alternarFiltroCruzado("diaSemana", ordemExibicao[idxExibicao]);
-            },
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: { label: ctx => ctx.parsed.y.toLocaleString("pt-BR") + " ocorrências" }
-                }
-            },
-            scales: {
-                x: { ticks: { color: "#f1f5f9", font: { size: 13 } }, grid: { display: false } },
-                y: { beginAtZero: true, ticks: { color: "#94a3b8" }, grid: { color: "rgba(51, 65, 85, 0.5)" } }
-            }
+    responsive: true,
+    maintainAspectRatio: false,
+    onClick: (evt, elements) => {
+        if (!elements.length) return;
+        const idxExibicao = elements[0].index;
+        alternarFiltroCruzado("diaSemana", ordemExibicao[idxExibicao]);
+    },
+    plugins: {
+        legend: { display: false },
+        datalabels: { ...DATALABELS_VERTICAL },   // 👈 adiciona isto
+        tooltip: {
+            callbacks: { label: ctx => ctx.parsed.y.toLocaleString("pt-BR") + " ocorrências" }
         }
+    },
+    scales: {
+        x: { ticks: { color: "#f1f5f9", font: { size: 13 } }, grid: { display: false } },
+        y: {
+            beginAtZero: true,
+            suggestedMax: Math.max(...valoresExibicao) * 1.1,   // 👈 respiro pra o rótulo
+            ticks: { color: "#94a3b8" },
+            grid: { color: "rgba(51, 65, 85, 0.5)" }
+        }
+    }
+}
     });
 }
 
