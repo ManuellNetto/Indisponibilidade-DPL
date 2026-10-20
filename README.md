@@ -7,3 +7,6 @@ Proposta de dash usando: HTML, CSS e JavaScript, para calcular indisponibilidade
 - Top 15 equipes
 - Volume por dia na semana
 - Volume por turno
+
+
+https://manuellnetto.github.io/Indisponibilidade-DPL/
